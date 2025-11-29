@@ -135,12 +135,13 @@ export const backend = {
         parts: [{ text: m.text }]
       }));
 
-      const responseText = await ai.chatWithWildcord(text, aiHistory);
+      const response = await ai.chatWithWildcord(text, aiHistory);
 
       const botMsg: ChatMessage = {
         id: (Date.now() + 1).toString(),
         role: 'model',
-        text: responseText,
+        text: response.text,
+        sources: response.sources,
         timestamp: Date.now()
       };
       

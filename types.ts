@@ -7,6 +7,11 @@ export enum Page {
   COMMUNITY = 'COMMUNITY'
 }
 
+export interface Source {
+  title: string;
+  uri: string;
+}
+
 export interface RhythmSegment {
   title: string;
   duration: string;
@@ -20,6 +25,7 @@ export interface DailyRhythm {
   ritual: RhythmSegment; // Morning/Coffee
   work: RhythmSegment;   // Main physical outlet
   peace: RhythmSegment;  // Evening decompression
+  sources?: Source[];
 }
 
 export interface ChatMessage {
@@ -27,6 +33,7 @@ export interface ChatMessage {
   role: 'user' | 'model';
   text: string;
   timestamp: number;
+  sources?: Source[];
 }
 
 export interface DogProfile {

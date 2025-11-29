@@ -2,7 +2,7 @@
 import React, { useState, useEffect } from 'react';
 import { DogProfile, DailyRhythm, RhythmSegment } from '../types';
 import { backend } from '../services/backend'; 
-import { Loader2, Flame, Coffee, Moon, Dog, Clock, Trees, LucideIcon } from 'lucide-react';
+import { Loader2, Flame, Coffee, Moon, Dog, Clock, Trees, LucideIcon, Search, ExternalLink } from 'lucide-react';
 
 // --- Internal Components ---
 
@@ -166,7 +166,7 @@ const Training: React.FC = () => {
                 <div className="w-24 h-24 border-4 border-wild-800 rounded-full"></div>
                 <div className="w-24 h-24 border-4 border-wild-accent rounded-full border-t-transparent animate-spin absolute top-0 left-0"></div>
               </div>
-              <p className="mt-8 font-display text-2xl uppercase tracking-widest text-wild-light animate-pulse">Analyzing parameters...</p>
+              <p className="mt-8 font-display text-2xl uppercase tracking-widest text-wild-light animate-pulse">Scanning Breed Data...</p>
             </div>
           )}
 
@@ -203,6 +203,30 @@ const Training: React.FC = () => {
                   colors={{ border: 'border-blue-500/80', text: 'text-blue-500', bg: 'bg-blue-900/10' }}
                   delay="0.5s"
                 />
+
+                {/* Sources Section */}
+                {rhythm.sources && rhythm.sources.length > 0 && (
+                   <div className="glass-panel border-t border-wild-800 p-6 rounded-xl mt-8 animate-fade-in-up" style={{ animationDelay: '0.7s'}}>
+                      <div className="flex items-center gap-2 text-wild-muted mb-4">
+                         <Search size={16} />
+                         <span className="text-[10px] uppercase tracking-widest font-bold">Intel Sources</span>
+                      </div>
+                      <div className="grid grid-cols-1 gap-2">
+                         {rhythm.sources.map((source, idx) => (
+                           <a 
+                             key={idx} 
+                             href={source.uri} 
+                             target="_blank" 
+                             rel="noopener noreferrer"
+                             className="flex items-center justify-between text-sm text-wild-600 hover:text-wild-accent transition-colors bg-wild-900/30 p-2 rounded border border-wild-800/50 hover:border-wild-accent/30 group"
+                           >
+                              <span className="truncate mr-4">{source.title}</span>
+                              <ExternalLink size={12} className="opacity-50 group-hover:opacity-100" />
+                           </a>
+                         ))}
+                      </div>
+                   </div>
+                )}
               </div>
             </div>
           )}

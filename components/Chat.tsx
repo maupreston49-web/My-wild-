@@ -1,8 +1,8 @@
 
 import React, { useState, useRef, useEffect } from 'react';
 import { ChatMessage } from '../types';
-import { backend } from '../services/backend'; // Updated import
-import { Send, Bot, User, Radio, Wifi } from 'lucide-react';
+import { backend } from '../services/backend'; 
+import { Send, Bot, User, Radio, Wifi, ExternalLink, Search } from 'lucide-react';
 
 const Chat: React.FC = () => {
   const [messages, setMessages] = useState<ChatMessage[]>([]);
@@ -71,7 +71,7 @@ const Chat: React.FC = () => {
       <div className="flex-1 overflow-y-auto space-y-6 mb-4 no-scrollbar px-4 md:px-0">
         {messages.map((msg) => (
           <div key={msg.id} className={`flex ${msg.role === 'user' ? 'justify-end' : 'justify-start'}`}>
-            <div className={`flex max-w-[85%] md:max-w-[75%] ${msg.role === 'user' ? 'flex-row-reverse' : 'flex-row'}`}>
+            <div className={`flex max-w-[95%] md:max-w-[80%] ${msg.role === 'user' ? 'flex-row-reverse' : 'flex-row'}`}>
               
               {/* Avatar */}
               <div className={`w-8 h-8 rounded flex items-center justify-center flex-shrink-0 border ${msg.role === 'user' ? 'bg-wild-800 border-wild-700 ml-3 text-wild-muted' : 'bg-wild-accent border-wild-600 mr-3 text-wild-900'}`}>
@@ -86,6 +86,29 @@ const Chat: React.FC = () => {
                       : 'bg-wild-800/80 text-wild-light rounded-tl-none border border-wild-700 backdrop-blur-sm'
                   }`}>
                     {msg.text}
+                    
+                    {/* Sources (if available) */}
+                    {msg.sources && msg.sources.length > 0 && (
+                      <div className="mt-4 pt-3 border-t border-wild-700/50">
+                        <div className="flex items-center gap-1 text-[10px] text-wild-muted uppercase tracking-wider mb-2 font-bold">
+                           <Search size={10} /> Verified Intel
+                        </div>
+                        <div className="flex flex-wrap gap-2">
+                           {msg.sources.slice(0, 3).map((source, idx) => (
+                             <a 
+                               key={idx} 
+                               href={source.uri} 
+                               target="_blank" 
+                               rel="noopener noreferrer"
+                               className="flex items-center gap-1 text-xs bg-wild-950/30 hover:bg-wild-700 px-2 py-1 rounded text-wild-400 hover:text-wild-light transition-colors border border-wild-800"
+                             >
+                               <span className="max-w-[150px] truncate">{source.title}</span>
+                               <ExternalLink size={10} />
+                             </a>
+                           ))}
+                        </div>
+                      </div>
+                    )}
                   </div>
                   {/* Timestamp */}
                   <span className="text-[10px] text-wild-700 font-mono mt-1 uppercase">

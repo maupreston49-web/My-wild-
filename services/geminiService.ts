@@ -1,7 +1,7 @@
 
-import { GoogleGenAI, Type } from "@google/genai";
+import { GoogleGenAI } from "@google/genai";
 import { SYSTEM_INSTRUCTION_TRAINER, SYSTEM_INSTRUCTION_CHAT, SYSTEM_INSTRUCTION_COACH } from "../constants";
-import { DailyRhythm, DogProfile } from "../types";
+import { DailyRhythm, DogProfile, Source } from "../types";
 
 // Helper to check API key inside functions to prevent module-level crash
 const getApiKey = () => {
@@ -18,47 +18,31 @@ const cleanJSON = (text: string): string => {
   return text.replace(/```json/g, '').replace(/```/g, '').trim();
 };
 
-// Schema definition reused for generation attempts
-const DAILY_RHYTHM_SCHEMA = {
-  type: Type.OBJECT,
-  properties: {
-    theme: { type: Type.STRING, description: "A unique, rugged name for today's plan (e.g. 'Operation: Concrete Jungle' or 'The Wet Weather Protocol')" },
-    motto: { type: Type.STRING, description: "A short, punchy thought for the human." },
-    ritual: {
-      type: Type.OBJECT,
-      properties: {
-        title: { type: Type.STRING, description: "Name of the morning activity" },
-        duration: { type: Type.STRING },
-        activity: { type: Type.STRING, description: "Specific instructions. Not generic." },
-        vibe: { type: Type.STRING, description: "Mood: e.g. Laser Focus, Calm Control" }
-      }
-    },
-    work: {
-      type: Type.OBJECT,
-      properties: {
-        title: { type: Type.STRING },
-        duration: { type: Type.STRING },
-        activity: { type: Type.STRING, description: "The main event. Highly specific to breed/environment." },
-        vibe: { type: Type.STRING }
-      }
-    },
-    peace: {
-      type: Type.OBJECT,
-      properties: {
-        title: { type: Type.STRING },
-        duration: { type: Type.STRING },
-        activity: { type: Type.STRING },
-        vibe: { type: Type.STRING }
-      }
+// Helper to extract sources from grounding metadata
+const extractSources = (response: any): Source[] => {
+  const chunks = response.candidates?.[0]?.groundingMetadata?.groundingChunks || [];
+  const sources: Source[] = [];
+  
+  chunks.forEach((chunk: any) => {
+    if (chunk.web) {
+      sources.push({
+        title: chunk.web.title || "Source",
+        uri: chunk.web.uri
+      });
     }
-  }
+  });
+
+  // Deduplicate sources by URI
+  const uniqueSources = new Map();
+  sources.forEach(s => uniqueSources.set(s.uri, s));
+  return Array.from(uniqueSources.values());
 };
 
 export const generateDailyRhythm = async (dog: DogProfile): Promise<DailyRhythm | null> => {
   const apiKey = getApiKey();
   const ai = new GoogleGenAI({ apiKey });
 
-  // Random seed to force variety and break semantic caching
+  // Random seed to force variety
   const missionSeed = Math.floor(Math.random() * 10000);
 
   const prompt = `
@@ -74,82 +58,82 @@ export const generateDailyRhythm = async (dog: DogProfile): Promise<DailyRhythm 
     Time Window: ${dog.timeAvailable}
     
     DIRECTIVES:
-    Generate a highly specific, non-repetitive Daily Rhythm.
-    1. Morning Ritual: Low effort for human, high engagement for dog.
-    2. The Work: High intensity outlet. If time is short, increase mental load.
-    3. The Peace: Decompression.
+    1. Use Google Search to find specific behavioral traits, working history, and training needs for the ${dog.breed} breed.
+    2. Incorporate these specific traits into the "Daily Rhythm" plan below.
+    3. Return ONLY a valid JSON object. Do not include markdown formatting or extra text.
     
-    CONSTRAINTS:
-    - Do NOT use generic terms like "walk around the block".
-    - Create a unique "Theme" name based on the specific breed/environment combo.
-    - If the dog is high energy and time is short, prescribe intense mental work.
+    JSON STRUCTURE REQUIRED:
+    {
+      "theme": "A unique, rugged name for the plan",
+      "motto": "A short punchy quote",
+      "ritual": { "title": "Morning activity name", "duration": "Time", "activity": "Specific instructions", "vibe": "Mood" },
+      "work": { "title": "Main event name", "duration": "Time", "activity": "Specific instructions", "vibe": "Mood" },
+      "peace": { "title": "Evening activity name", "duration": "Time", "activity": "Specific instructions", "vibe": "Mood" }
+    }
   `;
 
   try {
-    try {
-      // Attempt 1: High-End Reasoning (Gemini 3 Pro)
-      // Using higher temperature for creativity/variety
-      const response = await ai.models.generateContent({
-        model: 'gemini-3-pro-preview',
-        contents: prompt,
-        config: {
-            systemInstruction: SYSTEM_INSTRUCTION_TRAINER,
-            responseMimeType: "application/json",
-            responseSchema: DAILY_RHYTHM_SCHEMA,
-            temperature: 1.2, // Increased for variety
-            topK: 40,
-        }
-      });
-      const text = response.text;
-      if (text) return JSON.parse(cleanJSON(text)) as DailyRhythm;
-    } catch (primaryError) {
-      console.warn("Gemini 3 Pro unavailable (likely quota), falling back to Flash.", primaryError);
-      
-      // Attempt 2: High-Speed/Stability (Gemini 2.5 Flash)
-      // Flash supports thinkingConfig for better reasoning.
-      const response = await ai.models.generateContent({
-        model: 'gemini-2.5-flash',
-        contents: prompt,
-        config: {
-            systemInstruction: SYSTEM_INSTRUCTION_TRAINER,
-            thinkingConfig: { thinkingBudget: 2048 },
-            responseMimeType: "application/json",
-            responseSchema: DAILY_RHYTHM_SCHEMA,
-            temperature: 1.0, // Slightly higher than default
-        }
-      });
-      const text = response.text;
-      if (text) return JSON.parse(cleanJSON(text)) as DailyRhythm;
+    // Using gemini-2.5-flash with googleSearch for fast, grounded results
+    const response = await ai.models.generateContent({
+      model: 'gemini-2.5-flash',
+      contents: prompt,
+      config: {
+        tools: [{googleSearch: {}}],
+        systemInstruction: SYSTEM_INSTRUCTION_TRAINER,
+        temperature: 0.7, // Controlled creativity for valid JSON
+      }
+    });
+
+    const text = response.text;
+    if (text) {
+      try {
+        const parsedRhythm = JSON.parse(cleanJSON(text)) as DailyRhythm;
+        // Attach grounding sources if available
+        parsedRhythm.sources = extractSources(response);
+        return parsedRhythm;
+      } catch (e) {
+        console.error("Failed to parse Rhythm JSON", e);
+        // Fallback or retry logic could go here
+      }
     }
-  } catch (finalError) {
-    console.error("All rhythm generation attempts failed:", finalError);
+  } catch (error) {
+    console.error("Rhythm generation failed:", error);
     return null;
   }
   
   return null;
 };
 
-export const chatWithWildcord = async (message: string, history: {role: string, parts: {text: string}[]}[]): Promise<string> => {
+export const chatWithWildcord = async (message: string, history: {role: string, parts: {text: string}[]}[]): Promise<{ text: string, sources?: Source[] }> => {
   const apiKey = getApiKey();
   const ai = new GoogleGenAI({ apiKey });
 
   try {
-    const chat = ai.chats.create({
-      model: 'gemini-2.5-flash', // Flash is faster for real-time chat
+    // Generate content with googleSearch tool for up-to-date info
+    // We construct the history manually for generateContent as 'chat' helper with tools can be complex to manage state
+    // converting chat history to Content format
+    const contents = [
+        ...history.map(h => ({ role: h.role, parts: h.parts })),
+        { role: 'user', parts: [{ text: message }] }
+    ];
+
+    const response = await ai.models.generateContent({
+      model: 'gemini-2.5-flash',
+      contents: contents,
       config: {
         systemInstruction: SYSTEM_INSTRUCTION_CHAT,
-      },
-      history: history.map(h => ({
-        role: h.role,
-        parts: h.parts
-      }))
+        tools: [{googleSearch: {}}],
+      }
     });
 
-    const result = await chat.sendMessage({ message });
-    return result.text || "Silence... try again.";
+    return {
+        text: response.text || "Silence... try again.",
+        sources: extractSources(response)
+    };
+
   } catch (error) {
     console.error("Chat error:", error);
-    return "The radio silence is deafening. Check your connection.";
+    return { text: "The radio silence is deafening. Check your connection." };
   }
 };
 
